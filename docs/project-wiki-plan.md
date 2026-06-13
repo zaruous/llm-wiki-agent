@@ -86,7 +86,18 @@ category: functional | non-functional | constraint
 priority: must | should | could | wont        # MoSCoW
 status: proposed | approved | in-progress | implemented | verified | closed | rejected | deferred
 source_interviews: [INT-001]                   # 출처 추적
-owner: "담당자"
+# --- 실행/WBS 관리 (요구사항 확정 후 채움) ---
+wbs_id: "1.2.3"                                # WBS 번호 (계층)
+owner: "담당자"                                 # 책임자
+assignees: ["작업자A", "작업자B"]              # 실제 수행자
+progress: 0                                    # 진척률 0–100 (%)
+start_date: YYYY-MM-DD                          # 착수 예정/실제
+due_date: YYYY-MM-DD                            # 종료 목표
+completed_date: YYYY-MM-DD                      # 실제 완료일 (verified/closed 시)
+estimate: "5d"                                  # 예상 공수 (선택)
+actual: "6d"                                    # 실제 공수 (선택)
+depends_on: [REQ-002]                           # 선행 요구사항/작업
+milestone: [[M1]]                               # 귀속 마일스톤
 tags: []
 last_updated: YYYY-MM-DD
 ---
@@ -101,17 +112,31 @@ last_updated: YYYY-MM-DD
 - [ ] 조건 1
 - [ ] 조건 2
 
+## 작업 분해 (WBS Tasks) — 확정 후
+| # | 작업 | 담당 | 시작 | 종료 | 상태 | 진척 |
+|---|---|---|---|---|---|---|
+| 1.2.3.1 | ... | 작업자A | 06-15 | 06-18 | in-progress | 40% |
+| 1.2.3.2 | ... | 작업자B | 06-18 | 06-20 | todo | 0% |
+
 ## 연결 (Connections)
 - [[INT-001]] — 도출된 인터뷰
 - [[DEC-003]] — 관련 의사결정
+- [[M1]] — 귀속 마일스톤
 - [[SCOPE]] — WBS 매핑 항목
 
-## 상태 이력
+## 상태 이력 (Status / Schedule Log)
 - 2026-06-13 proposed → approved (DEC-003)
+- 2026-06-15 start (assignee: 작업자A), progress 0%
+- 2026-06-18 progress 40%
 
 ## 변경 / 모순
 - [[REQ-009]]와 우선순위 충돌
 ```
+
+> **수명주기**: 요구사항은 `proposed→approved` 단계까지는 추적성(출처/근거) 중심으로
+> 관리되고, **`approved` 확정 시점부터 WBS 필드(wbs_id·assignees·progress·
+> start/due/completed·depends_on)를 채워** 실행/진척을 관리한다. 미확정 요구사항은
+> 해당 필드를 비워두며, `health.py`는 `approved+` 상태인데 담당자/일정이 비면 경고한다.
 
 ### 3.3 인터뷰 페이지 (`interviews/INT-XXX.md`)
 
@@ -147,17 +172,28 @@ type: scope
 last_updated: YYYY-MM-DD
 ---
 
+## WBS (작업 분해 구조 + 일정)
+| WBS | 항목 | 요구사항 | 담당 | 시작 | 종료 | 상태 | 진척 |
+|---|---|---|---|---|---|---|---|
+| 1 | (대분류) | — | — | — | — | — | — |
+| 1.2 | (중분류) | [[REQ-001]] | 작업자A | 06-15 | 06-20 | in-progress | 40% |
+| 1.3 | (중분류) | [[REQ-002]] | 작업자B | 06-21 | 06-28 | todo | 0% |
 ## In-Scope (포함)
-- WBS 1. ... → [[REQ-001]], [[REQ-002]]
+- WBS 1.2 ... → [[REQ-001]], [[REQ-002]]
 ## Out-of-Scope (제외)
 - ... (제외 사유 / 관련 [[DEC-XXX]])
 ## 완료 정의 (Definition of Done)
-- 모든 must 요구사항이 verified 상태
+- 모든 must 요구사항이 verified 상태 (progress 100%)
 ## 프로젝트 종료 기준 (Exit Criteria)
 - ...
 ## 범위 변경 이력 (Scope Change Log)
 - 2026-06-13 REQ-015 추가 (DEC-007)
 ```
+
+> WBS는 `scope/`에서 **프로젝트 전체 일정·진척을 한눈에** 보는 마스터 테이블이고,
+> 각 요구사항 페이지의 "작업 분해(WBS Tasks)"는 그 요구사항 **내부 세부 작업**이다.
+> 두 곳의 진척/일정은 요구사항 frontmatter(`progress`·`start_date`·`due_date`)를
+> 단일 출처(source of truth)로 삼아 동기화한다.
 
 ### 3.5 기타 페이지
 
@@ -193,9 +229,13 @@ last_updated: YYYY-MM-DD
 
 ### 종료범위(완료) 집계 규칙
 ```
-완료율 = (verified + closed 요구사항 수) / (전체 - rejected - deferred)
-프로젝트 종료 가능 = 모든 must 요구사항 status ∈ {verified, closed}
+완료율(건수)   = (verified + closed 요구사항 수) / (전체 - rejected - deferred)
+진척률(가중)   = Σ(요구사항 progress) / (대상 요구사항 수)   # 부분 진행 반영
+지연 요구사항  = status ∉ {verified,closed} AND due_date < today
+
+프로젝트 종료 가능 = 모든 must 요구사항 status ∈ {verified, closed} (progress 100%)
                     AND 오픈 리스크 中 high 없음
+                    AND 지연 요구사항 없음
                     AND scope/Exit Criteria 전 항목 충족
 ```
 
@@ -205,10 +245,10 @@ last_updated: YYYY-MM-DD
 
 | 도구 | 추가 검사 |
 |---|---|
-| `health.py` | 요구사항 ID 유니크/포맷, `status`·`priority` enum 유효성, 인터뷰↔요구사항 양방향 링크 존재 |
-| `lint.py` | 인수조건 없는 요구사항, 구현/범위 미매핑, 모순·중복 요구사항, Out-of-scope인데 활성 상태 |
-| `build_graph.py` | 노드 타입별 색상(요구사항/인터뷰/이해관계자/리스크), 추적성 경로 끊김 분석 |
-| `status.py` (신규, 선택) | 상태별 집계·완료율·번다운 리포트 (LLM 불필요, 결정론적) |
+| `health.py` | 요구사항 ID 유니크/포맷, `status`·`priority` enum 유효성, 인터뷰↔요구사항 양방향 링크 존재, **approved+ 인데 담당자/일정 누락**, `progress` 범위(0–100)·완료상태 정합성(verified면 100%) |
+| `lint.py` | 인수조건 없는 요구사항, 구현/범위 미매핑, 모순·중복 요구사항, Out-of-scope인데 활성 상태, **due_date 초과(지연)·진척 정체** |
+| `build_graph.py` | 노드 타입별 색상(요구사항/인터뷰/이해관계자/리스크), 추적성 경로 끊김 분석, **선행관계(depends_on) 엣지** |
+| `status.py` (신규, 선택) | 상태별 집계·완료율·**진척률 가중 집계·일정 지연 목록·번다운/간트 리포트** (LLM 불필요, 결정론적) |
 
 ---
 
