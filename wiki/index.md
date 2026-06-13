@@ -1,14 +1,24 @@
-# Wiki Index
+# Project Wiki Index
 
-This file is maintained by the LLM. Updated on every ingest.
+This file is maintained by the agent. Updated on every ingest and requirement change.
 
-## Overview
-- [Overview](overview.md) — living synthesis across all sources
+## Project
+- [Charter](charter.md) — goal, scope, stakeholders
+- [Overview](overview.md) — live dashboard
+- [Scope / WBS](scope/scope.md) — scope definition & master WBS
 
-## Sources
+## Requirements
+*Format: REQ-001 → requirements/REQ-001.md — title — priority / status (progress%)*
 
-## Entities
+## Interviews
+*Format: INT-001 → interviews/INT-001.md — title — YYYY-MM-DD*
 
-## Concepts
+## Decisions
+
+## Stakeholders
+
+## Milestones
+
+## Risks
 
 ## Syntheses

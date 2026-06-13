@@ -1,17 +1,39 @@
 ---
-title: "Overview"
+title: "Project Overview / Dashboard"
 type: synthesis
 tags: []
-sources: []
 last_updated: ""
 ---
 
-# Overview
+# Project Overview
 
-*This page is maintained by the LLM. It is updated on every ingest to reflect the current synthesis across all sources.*
+*Maintained by the agent. Updated on every ingest and requirement change to reflect live project status. For exact numbers run `python tools/status.py`.*
 
-No sources ingested yet. Add your first source with:
+## Status at a Glance
+- **Completion rate:** — (verified + closed) / (total − rejected − deferred)
+- **Weighted progress:** —
+- **Exit readiness:** —
 
-```bash
-python tools/ingest.py raw/your-source.md
+## Requirements by Status
+| proposed | approved | in-progress | implemented | verified | closed | rejected | deferred |
+|---|---|---|---|---|---|---|---|
+| 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+## Requirements by Priority (MoSCoW)
+| must | should | could | wont |
+|---|---|---|---|
+| 0 | 0 | 0 | 0 |
+
+## Overdue / At-Risk
+- None yet.
+
+## Open Risks
+- None yet.
+
+---
+
+No interviews ingested yet. Add the first one:
+
+```
+ingest raw/interviews/<file>.md
 ```
