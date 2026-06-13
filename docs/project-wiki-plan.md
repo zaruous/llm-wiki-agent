@@ -94,6 +94,8 @@ progress: 0                                    # 진척률 0–100 (%)
 start_date: YYYY-MM-DD                          # 착수 예정/실제
 due_date: YYYY-MM-DD                            # 종료 목표
 completed_date: YYYY-MM-DD                      # 실제 완료일 (verified/closed 시)
+dropped_date: YYYY-MM-DD                        # 드롭일 (rejected/deferred 시)
+dropped_reason: ""                              # 드롭 사유 (관련 [[DEC-XXX]])
 estimate: "5d"                                  # 예상 공수 (선택)
 actual: "6d"                                    # 실제 공수 (선택)
 depends_on: [REQ-002]                           # 선행 요구사항/작업
@@ -128,6 +130,7 @@ last_updated: YYYY-MM-DD
 - 2026-06-13 proposed → approved (DEC-003)
 - 2026-06-15 start (assignee: 작업자A), progress 0%
 - 2026-06-18 progress 40%
+- 2026-06-20 → deferred (사유: 예산 보류, [[DEC-011]])   # 드롭 시 일자·사유 기록
 
 ## 변경 / 모순
 - [[REQ-009]]와 우선순위 충돌
@@ -245,7 +248,7 @@ last_updated: YYYY-MM-DD
 
 | 도구 | 추가 검사 |
 |---|---|
-| `health.py` | 요구사항 ID 유니크/포맷, `status`·`priority` enum 유효성, 인터뷰↔요구사항 양방향 링크 존재, **approved+ 인데 담당자/일정 누락**, `progress` 범위(0–100)·완료상태 정합성(verified면 100%) |
+| `health.py` | 요구사항 ID 유니크/포맷, `status`·`priority` enum 유효성, 인터뷰↔요구사항 양방향 링크 존재, **approved+ 인데 담당자/일정 누락**, `progress` 범위(0–100)·완료상태 정합성(verified면 100%), **rejected/deferred 인데 `dropped_date`·사유 누락** |
 | `lint.py` | 인수조건 없는 요구사항, 구현/범위 미매핑, 모순·중복 요구사항, Out-of-scope인데 활성 상태, **due_date 초과(지연)·진척 정체** |
 | `build_graph.py` | 노드 타입별 색상(요구사항/인터뷰/이해관계자/리스크), 추적성 경로 끊김 분석, **선행관계(depends_on) 엣지** |
 | `status.py` (신규, 선택) | 상태별 집계·완료율·**진척률 가중 집계·일정 지연 목록·번다운/간트 리포트** (LLM 불필요, 결정론적) |
