@@ -158,7 +158,8 @@ title: "Stakeholder interview — title"
 type: interview
 interview_type: discovery | requirements | review | retrospective
 date: YYYY-MM-DD
-participants: []                # [[StakeholderName]]
+participants: ["[[StakeholderName]]"]   # quote each wikilink in the inline list
+source_file: "raw/interviews/...md"     # raw origin doc (traceability)
 tags: []
 last_updated: YYYY-MM-DD
 ---

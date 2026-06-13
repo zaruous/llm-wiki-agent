@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 """
-Lint the LLM Wiki for health issues.
+Lint the Project Management Wiki for content-quality issues.
 
 Usage:
     python tools/lint.py
@@ -11,9 +11,14 @@ Usage:
 Checks:
   - Orphan pages (no inbound wikilinks from other pages)
   - Broken wikilinks (pointing to pages that don't exist)
-  - Missing entity pages (entities mentioned in 3+ pages but no page)
-  - Contradictions between pages
-  - Data gaps and suggested new sources
+  - Missing pages (names referenced 3+ times but no page — e.g. a stakeholder
+    or milestone mentioned everywhere but never created)
+  - Contradictions / duplicate or conflicting requirements
+  - Unmapped requirements, missing acceptance criteria, out-of-scope-but-active
+  - Data gaps and suggested follow-up interviews
+
+For deterministic schema/status checks use health.py; for progress/completion
+numbers use status.py. This tool adds LLM-based semantic review.
 """
 
 import re
@@ -57,7 +62,8 @@ def call_llm(prompt: str, model_env: str, default_model: str, max_tokens: int = 
 
 def all_wiki_pages() -> list[Path]:
     return [p for p in WIKI_DIR.rglob("*.md")
-            if p.name not in ("index.md", "log.md", "lint-report.md")]
+            if p.name not in ("index.md", "log.md", "lint-report.md", "health-report.md")
+            and "_templates" not in p.relative_to(WIKI_DIR).parts]
 
 
 def extract_wikilinks(content: str) -> list[str]:
@@ -94,8 +100,9 @@ def find_broken_links(pages: list[Path]) -> list[tuple[Path, str]]:
     return broken
 
 
-def find_missing_entities(pages: list[Path]) -> list[str]:
-    """Find entity-like names mentioned in 3+ pages but lacking their own page."""
+def find_missing_pages(pages: list[Path]) -> list[str]:
+    """Find names referenced via [[wikilink]] in 3+ pages but lacking their own page
+    (e.g. a stakeholder or milestone mentioned everywhere but never created)."""
     mention_counts: dict[str, int] = defaultdict(int)
     existing_pages = {p.stem.lower() for p in pages}
     for p in pages:
@@ -269,11 +276,11 @@ def run_lint():
     # Deterministic checks
     orphans = find_orphans(pages)
     broken = find_broken_links(pages)
-    missing_entities = find_missing_entities(pages)
+    missing_pages = find_missing_pages(pages)
 
     print(f"  orphans: {len(orphans)}")
     print(f"  broken links: {len(broken)}")
-    print(f"  missing entity pages: {len(missing_entities)}")
+    print(f"  missing pages: {len(missing_pages)}")
 
     # Link density check
     sparse_pages = check_link_density(pages)
@@ -307,28 +314,28 @@ def run_lint():
         pages_context += f"\n\n### {rel}\n{read_file(p)[:1500]}"  # truncate long pages
 
     print("  running semantic lint via API...")
-    prompt = f"""You are linting an LLM Wiki. Review the pages below and identify:
-1. Contradictions between pages (claims that conflict)
-2. Stale content (summaries that newer sources have superseded)
-3. Data gaps (important questions the wiki can't answer — suggest specific sources to find)
-4. Concepts mentioned but lacking depth
+    prompt = f"""You are linting a Project Management Wiki. Review the pages below and identify:
+1. Contradictions / duplicate or conflicting requirements (e.g. two requirements with opposing priority)
+2. Requirements missing acceptance criteria, or approved+ requirements with no WBS/scope mapping
+3. Out-of-scope items that are still active, or overdue / stalled requirements
+4. Data gaps (important questions the wiki can't answer — suggest specific follow-up interviews)
 
 Wiki pages (sample of {len(sample)} pages):
 {pages_context}
 
 Return a markdown lint report with these sections:
-## Contradictions
-## Stale Content
-## Data Gaps & Suggested Sources
-## Concepts Needing More Depth
+## Contradictions & Conflicting Requirements
+## Missing Acceptance Criteria / Unmapped Requirements
+## Scope & Schedule Issues
+## Data Gaps & Suggested Interviews
 
-Be specific — name the exact pages and claims involved.
+Be specific — name the exact pages (REQ/INT ids) and claims involved.
 """
     semantic_report = call_llm(prompt, "LLM_MODEL", "claude-3-5-sonnet-latest", max_tokens=3000)
 
     # Compose full report
     report_lines = [
-        f"# Wiki Lint Report — {today}",
+        f"# Project Wiki Lint Report — {today}",
         "",
         f"Scanned {len(pages)} pages.",
         "",
@@ -348,14 +355,14 @@ Be specific — name the exact pages and claims involved.
             report_lines.append(f"- `{page.relative_to(REPO_ROOT)}` links to `[[{link}]]` — not found")
         report_lines.append("")
 
-    if missing_entities:
-        report_lines.append("### Missing Entity Pages (mentioned 3+ times but no page)")
-        report_lines.append("> [!warning] Action Required\n> Run `python3 generate_missing_entities.py` to automatically materialize these missing hubs.")
-        for name in missing_entities:
+    if missing_pages:
+        report_lines.append("### Missing Pages (referenced 3+ times but no page)")
+        report_lines.append("> Consider creating these — e.g. a stakeholder or milestone mentioned across pages but never given its own page.")
+        for name in missing_pages:
             report_lines.append(f"- `[[{name}]]`")
         report_lines.append("")
 
-    if not orphans and not broken and not missing_entities and not sparse_pages:
+    if not orphans and not broken and not missing_pages and not sparse_pages:
         report_lines.append("No structural issues found.")
         report_lines.append("")
 
@@ -380,7 +387,7 @@ Be specific — name the exact pages and claims involved.
         report_lines.append("")
     elif not graph_data.get("nodes") or not graph_data.get("edges"):
         report_lines.append("> [!tip]")
-        report_lines.append("> Graph data is empty. Ingest sources and run `python tools/build_graph.py` to populate.")
+        report_lines.append("> Graph data is empty. Ingest interviews and run `python tools/build_graph.py` to populate.")
         report_lines.append("")
     else:
         # Hub stubs

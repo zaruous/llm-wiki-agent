@@ -5,6 +5,7 @@ type: interview
 interview_type: discovery
 date: ""
 participants: []
+source_file: ""
 tags: []
 last_updated: ""
 ---
