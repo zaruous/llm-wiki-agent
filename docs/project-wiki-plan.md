@@ -315,7 +315,117 @@ git에 저장**한다. 지식 위키보다 기밀성·개인정보 위험이 높
 
 ---
 
-## 8. 다음 액션
+## 8. 데이터 모델 (ERD)
+
+위키 페이지 타입을 엔티티로 본 개념적 ERD다. 각 박스 = 위키 페이지 종류,
+관계선 = `[[wikilinks]]`/frontmatter 참조로 구현되는 추적성 연결.
+
+```mermaid
+erDiagram
+    CHARTER     ||--o{ STAKEHOLDER  : "이해관계자"
+    CHARTER     ||--|| SCOPE        : "범위정의"
+    INTERVIEW   }o--o{ STAKEHOLDER  : "참석(participants)"
+    INTERVIEW   ||--o{ REQUIREMENT  : "도출(source_interviews)"
+    INTERVIEW   ||--o{ DECISION     : "의사결정"
+    DECISION    ||--o{ REQUIREMENT  : "승인/변경"
+    SCOPE       ||--o{ REQUIREMENT  : "In-Scope 포함"
+    MILESTONE   ||--o{ REQUIREMENT  : "귀속(milestone)"
+    REQUIREMENT ||--o{ WBS_TASK     : "작업분해"
+    REQUIREMENT }o--o{ REQUIREMENT  : "선행(depends_on)/충돌"
+    RISK        }o--o{ REQUIREMENT  : "영향"
+    REQUIREMENT ||--o{ SYNTHESIS    : "분석근거"
+
+    CHARTER {
+        string title
+        string goal
+        date   last_updated
+    }
+    INTERVIEW {
+        string id PK "INT-XXX"
+        string title
+        enum   interview_type "discovery|requirements|review|retrospective"
+        date   date
+        list   participants FK
+    }
+    STAKEHOLDER {
+        string name PK
+        string role
+        string interests
+        enum   influence "high|med|low"
+    }
+    DECISION {
+        string id PK "DEC-XXX"
+        string context
+        string decision
+        date   date
+    }
+    REQUIREMENT {
+        string id PK "REQ-XXX"
+        string title
+        enum   category "functional|non-functional|constraint"
+        enum   priority "must|should|could|wont"
+        enum   status "proposed|approved|in-progress|implemented|verified|closed|rejected|deferred"
+        list   source_interviews FK
+        string wbs_id
+        string owner
+        list   assignees
+        int    progress "0-100"
+        date   start_date
+        date   due_date
+        date   completed_date
+        date   dropped_date
+        string dropped_reason
+        list   depends_on FK
+        string milestone FK
+    }
+    WBS_TASK {
+        string wbs_no PK "1.2.3.1"
+        string task
+        string assignee
+        date   start
+        date   end
+        enum   status "todo|in-progress|done"
+        int    progress "0-100"
+    }
+    MILESTONE {
+        string id PK "M-XXX"
+        string title
+        date   target_date
+        string gate_criteria
+    }
+    RISK {
+        string id PK "RISK-XXX"
+        enum   probability "high|med|low"
+        enum   impact "high|med|low"
+        string mitigation
+        string trigger
+    }
+    SCOPE {
+        list   in_scope
+        list   out_of_scope
+        string definition_of_done
+        string exit_criteria
+    }
+    SYNTHESIS {
+        string id PK
+        string question
+        date   last_updated
+    }
+```
+
+**관계 카디널리티 요약**
+- 한 인터뷰는 여러 요구사항을 도출(1:N), 여러 이해관계자가 참석(N:M)
+- 한 요구사항은 여러 인터뷰가 출처일 수 있고(N:M, `source_interviews`), 여러 WBS 작업으로 분해(1:N)
+- 요구사항↔요구사항: 선행관계(`depends_on`)·우선순위 충돌 (자기참조 N:M)
+- 의사결정(DEC)은 요구사항의 승인·범위변경·드롭 근거(1:N)
+- 리스크·마일스톤은 요구사항과 N:M / 1:N 으로 연결
+
+> WBS_TASK는 물리적으로는 별도 페이지가 아니라 **요구사항 페이지 내부 테이블**이며,
+> ERD에서는 관계를 보이기 위해 분리 표기했다(§3.2의 단일 출처 원칙 유지).
+
+---
+
+## 9. 다음 액션
 
 1. 본 계획 리뷰 & 확정 (보안 7.1·7.2 반영 범위 합의)
 2. 코어위키 자료 공유 (병합 대상/형식 + 민감도 등급 확인)
