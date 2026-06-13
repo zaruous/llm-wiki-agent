@@ -168,7 +168,7 @@ def all_wiki_pages() -> set[str]:
     """Return set of all wiki page stems (case-insensitive)."""
     pages = set()
     for p in WIKI_DIR.rglob("*.md"):
-        if p.name not in ("index.md", "log.md", "lint-report.md", "health-report.md") \
+        if p.name not in ("index.md", "log.md", "lint-report.md", "health-report.md", "tags.md") \
                 and "_templates" not in p.relative_to(WIKI_DIR).parts:
             pages.add(p.stem.lower())
     return pages
@@ -438,7 +438,7 @@ if __name__ == "__main__":
         index_content = read_file(INDEX_FILE).lower()
         unindexed_all = []
         for p in WIKI_DIR.rglob("*.md"):
-            if p.name in ("index.md", "log.md", "lint-report.md", "health-report.md", "overview.md"):
+            if p.name in ("index.md", "log.md", "lint-report.md", "health-report.md", "overview.md", "tags.md"):
                 continue
             if "_templates" in p.relative_to(WIKI_DIR).parts:
                 continue

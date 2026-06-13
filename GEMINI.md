@@ -13,6 +13,7 @@ Shorthand triggers (or just describe the same in plain English):
 - `ingest <file>` → Ingest Workflow
 - `query: <question>` → Query Workflow
 - `health` → Health Workflow (fast, every session)
+- `format` → Format & Tags Workflow (normalize frontmatter, check tags)
 - `project status` → Status Workflow (progress / scope / risks dashboard)
 - `lint` → Lint Workflow (expensive, periodic)
 - `build graph` → Graph Workflow
@@ -45,10 +46,12 @@ wiki/                # Claude owns this layer entirely
   milestones/        # Milestones / schedule / gates (M-XXX)
   risks/             # Risks (RISK-XXX)
   syntheses/         # Saved query answers / analyses
-  _templates/        # Page templates (not real pages — ignored by health/graph)
+  tags.md            # Tag registry (controlled vocabulary) — meta, not a page
+  _templates/        # Page templates (not real pages — ignored by tools)
 graph/               # Auto-generated traceability graph data
 tools/               # Standalone Python scripts
   health.py          # Structural checks (deterministic, no LLM calls)
+  format.py          # Frontmatter normalizer + tag linter (deterministic)
   status.py          # Progress / completion / overdue rollup (deterministic)
   lint.py            # Content quality checks (uses LLM for semantic analysis)
   build_graph.py     # Traceability graph generation
@@ -283,6 +286,18 @@ Run: `python tools/status.py` (deterministic rollup, no LLM calls):
 - **Weighted progress** = mean(progress) over active requirements
 - **Overdue list** — active requirements past `due_date`
 - **Exit readiness** — all `must` verified/closed AND no overdue AND no high open risk AND Exit Criteria met
+
+## Format & Tags Workflow
+
+Triggered by: *"format the wiki"*
+
+Run: `python tools/format.py` (`--write` to apply, `--json` machine-readable). Deterministic, no LLM calls. It:
+- Normalizes frontmatter to the **canonical field order** per page type
+- Coerces types: `progress`→int; `tags`→`kebab-case`, lowercased, de-duplicated, sorted
+- Reports **missing required fields** and **fields out of order**
+- Validates `tags` against the registry in `wiki/tags.md` — flags **unknown tags** (never auto-deletes them)
+
+**Tag conventions:** lowercase `kebab-case`, no spaces. A tag is valid if it is in `wiki/tags.md` *Allowed Tags* or starts with an approved namespace (`area/`, `phase/`, `component/`, `team/`). To add a tag to the vocabulary, edit `wiki/tags.md`. Run `format --write` after bulk edits and before lint/graph.
 
 ## Lint Workflow
 

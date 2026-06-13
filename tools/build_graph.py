@@ -102,7 +102,7 @@ def sha256(text: str) -> str:
 
 def all_wiki_pages() -> list[Path]:
     return [p for p in WIKI_DIR.rglob("*.md")
-            if p.name not in ("index.md", "log.md", "lint-report.md", "health-report.md")
+            if p.name not in ("index.md", "log.md", "lint-report.md", "health-report.md", "tags.md")
             and "_templates" not in p.relative_to(WIKI_DIR).parts]
 
 

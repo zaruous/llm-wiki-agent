@@ -55,7 +55,7 @@ DONE_STATUS = {"verified", "closed"}
 DROPPED_STATUS = {"rejected", "deferred"}
 
 # Directories / files that are not real wiki pages
-EXCLUDE_NAMES = {"index.md", "log.md", "lint-report.md", "health-report.md"}
+EXCLUDE_NAMES = {"index.md", "log.md", "lint-report.md", "health-report.md", "tags.md"}
 EXCLUDE_DIRS = {"_templates"}
 
 # High-confidence secret patterns + a couple of obvious PII patterns
