@@ -50,9 +50,15 @@ SCHEMA_FILE = REPO_ROOT / "CLAUDE.md"
 
 # Node type → color mapping
 TYPE_COLORS = {
-    "source": "#4CAF50",
-    "entity": "#2196F3",
-    "concept": "#FF9800",
+    # project management page types
+    "requirement": "#4CAF50",
+    "interview": "#2196F3",
+    "decision": "#FF9800",
+    "stakeholder": "#00BCD4",
+    "milestone": "#E91E63",
+    "risk": "#F44336",
+    "scope": "#795548",
+    "charter": "#607D8B",
     "synthesis": "#9C27B0",
     "unknown": "#9E9E9E",
 }
