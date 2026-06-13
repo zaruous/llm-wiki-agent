@@ -62,7 +62,7 @@ REQUIRED = {
 }
 DEFAULT_REQUIRED = ["title", "type", "tags", "last_updated"]
 
-ALWAYS_QUOTE_KEYS = {"title", "dropped_reason", "source_file", "role"}
+ALWAYS_QUOTE_KEYS = {"title", "dropped_reason", "source_file", "role", "wbs_id"}
 LIST_KEYS = {"source_interviews", "assignees", "participants", "depends_on", "tags"}
 
 
