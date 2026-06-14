@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-Graph Self-Healing Tool
+Wiki Self-Healing Tool (project management wiki)
 
-Automatically retrieves "Missing Entity Pages" from the wiki and generates 
-comprehensive definition pages for them using the LLM. 
-It resolves broken entity links by scanning existing contexts where the entity is referenced.
+Finds names referenced via [[wikilink]] in 3+ pages but lacking their own page
+(typically a stakeholder mentioned everywhere but never created) and generates a
+clearly-marked STUB stakeholder page for each, grounded in where the name appears.
+
+The output is a STUB for human review — never an authoritative record. This tool
+only creates pages; it never deletes or rewrites existing ones.
 
 Usage:
     python tools/heal.py
@@ -23,78 +26,95 @@ except ImportError:
 # Ensure tools can be imported
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tools.lint import find_missing_entities, all_wiki_pages
+from tools.lint import find_missing_pages, all_wiki_pages
 
 REPO_ROOT = Path(__file__).parent.parent
 WIKI_DIR = REPO_ROOT / "wiki"
-ENTITIES_DIR = WIKI_DIR / "entities"
+STAKEHOLDERS_DIR = WIKI_DIR / "stakeholders"
 
-def call_llm(prompt: str, max_tokens: int = 1500) -> str:
-    # Use litellm standard environment variables
-    # e.g., GEMINI_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY
-    model = os.getenv("LLM_MODEL", "claude-3-5-haiku-latest") # default to fast model
-    
+
+def call_llm(prompt: str, max_tokens: int = 1200) -> str:
+    # Uses litellm standard env vars (ANTHROPIC_API_KEY, etc.)
+    model = os.getenv("LLM_MODEL", "claude-3-5-haiku-latest")  # default to fast model
     response = completion(
         model=model,
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=max_tokens
+        max_tokens=max_tokens,
     )
     return response.choices[0].message.content
 
-def search_sources(entity: str, pages: list[Path]) -> list[Path]:
-    """Find up to 15 pages where this entity is mentioned natively."""
-    sources = []
-    for p in pages:
-        if "entities" not in str(p.parent) and "concepts" not in str(p.parent):
-            content = p.read_text(encoding="utf-8")
-            if entity.lower() in content.lower():
-                sources.append(p)
-    return sources[:15]
 
-def heal_missing_entities():
+def search_mentions(name: str, pages: list[Path]) -> list[Path]:
+    """Find up to 15 pages where this name is mentioned (excluding generated dirs)."""
+    found = []
+    for p in pages:
+        if "stakeholders" not in str(p.parent):
+            content = p.read_text(encoding="utf-8")
+            if name.lower() in content.lower():
+                found.append(p)
+    return found[:15]
+
+
+def heal_missing_pages():
     pages = all_wiki_pages()
-    missing_entities = find_missing_entities(pages)
-    
-    if not missing_entities:
-        print("Graph is fully connected. No missing entities found!")
+    missing = find_missing_pages(pages)
+
+    if not missing:
+        print("No missing pages. Every name referenced 3+ times already has a page.")
         return
 
-    ENTITIES_DIR.mkdir(exist_ok=True, parents=True)
-    print(f"Found {len(missing_entities)} missing entity nodes. Commencing auto-heal...")
-    
-    for entity in missing_entities:
-        print(f"Healing entity page for: {entity}")
-        sources = search_sources(entity, pages)
-        
-        context = ""
-        for s in sources:
-            context += f"\n\n### {s.name}\n{s.read_text(encoding='utf-8')[:800]}"
-        
-        prompt = f"""You are filling a data gap in the Personal LLM Wiki. 
-Create an Entity definition page for "{entity}".
+    STAKEHOLDERS_DIR.mkdir(exist_ok=True, parents=True)
+    print(f"Found {len(missing)} names referenced 3+ times without a page. "
+          "Generating STUB stakeholder pages for review...")
 
-Here is how the entity appears in the current sources:
+    for name in missing:
+        out_path = STAKEHOLDERS_DIR / f"{name}.md"
+        if out_path.exists():
+            print(f" -> Skipping {name}: page already exists")
+            continue
+
+        print(f"Drafting stub for: {name}")
+        mentions = search_mentions(name, pages)
+        context = ""
+        for s in mentions:
+            context += f"\n\n### {s.relative_to(WIKI_DIR)}\n{s.read_text(encoding='utf-8')[:800]}"
+
+        prompt = f"""You are drafting a STUB stakeholder page for a project management wiki.
+The name "{name}" is referenced in several pages but has no page of its own.
+
+Here is how "{name}" appears in the current wiki:
 {context}
 
-Format:
+Produce ONLY a markdown page in exactly this format (infer role from context; leave
+unknowns blank). Mark it clearly as a stub for human review:
 ---
-title: "{entity}"
-type: entity
-tags: []
-sources: {[s.name for s in sources]}
+title: "{name}"
+type: stakeholder
+role: ""
+influence: med
+tags: [stub]
+last_updated: ""
 ---
 
-# {entity}
+> **STUB — needs human review.** Auto-drafted from mentions; verify before relying on it.
 
-Write a comprehensive paragraph defining what `{entity}` means in the context of this wiki, its main significance, and any actions or associations related to it.
+## Role
+(infer from context, or leave a question)
+
+## Interests
+
+## Influence
+
+## Related
+(list the [[pages]] where this name appears)
 """
         try:
             result = call_llm(prompt)
-            out_path = ENTITIES_DIR / f"{entity}.md"
             out_path.write_text(result, encoding="utf-8")
-            print(f" -> Saved to {out_path.relative_to(REPO_ROOT)}")
+            print(f" -> Saved STUB to {out_path.relative_to(REPO_ROOT)} (review and complete it)")
         except Exception as e:
-            print(f" [!] Failed to generate {entity}: {e}")
+            print(f" [!] Failed to generate {name}: {e}")
+
 
 if __name__ == "__main__":
-    heal_missing_entities()
+    heal_missing_pages()

@@ -1,0 +1,28 @@
+__pycache__/
+*.pyc
+
+# Local secrets / environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Generated cache and reports
+.wiki-cache/
+wiki/health-report.md
+wiki/lint-report.md
+graph/graph.json
+graph/graph.html
+graph/graph-report.md
+graph/.cache.json
+graph/.inferred_edges.jsonl
+
+# Raw source policy:
+# keep raw/.gitkeep tracked, but do not commit project source documents by default.
+# Commit only anonymized fixtures intentionally with `git add -f`.
+raw/**
+!raw/
+!raw/.gitkeep

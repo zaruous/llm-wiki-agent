@@ -1,30 +1,37 @@
 #!/usr/bin/env python3
 """
-Refresh stale source pages by re-ingesting from raw documents.
+Raw inbox checker for the Project Management Wiki.
+
+Lists source documents in raw/ that have not been ingested yet, and flags
+already-ingested interviews whose raw source has changed since ingest. In the
+PM model interviews are point-in-time records (re-ingesting creates a NEW INT
+rather than overwriting), so this tool *reports* rather than auto-refreshes.
+
+Deterministic — no LLM calls.
 
 Usage:
-    python tools/refresh.py                     # refresh only changed sources
-    python tools/refresh.py --force             # force re-ingest all sources
-    python tools/refresh.py --page sources/X    # refresh a specific page
+    python tools/refresh.py            # list un-ingested raw docs + changed sources
+    python tools/refresh.py --json     # machine-readable output
 
-Compares raw document hashes against stored hashes to detect changes.
-Re-ingests changed documents to update wiki/sources/ pages with accurate facts.
+Linkage: an interview page records its origin via `source_file:` in frontmatter.
+A raw file is "ingested" when some interview page points at it.
 """
 
-import os
 import sys
 import json
 import hashlib
 import re
-from typing import Optional
+import argparse
 from pathlib import Path
-from datetime import date
 
 REPO_ROOT = Path(__file__).parent.parent
 WIKI_DIR = REPO_ROOT / "wiki"
 RAW_DIR = REPO_ROOT / "raw"
-SOURCES_DIR = WIKI_DIR / "sources"
-REFRESH_CACHE = REPO_ROOT / "graph" / ".refresh_cache.json"
+INTERVIEWS_DIR = WIKI_DIR / "interviews"
+
+SUPPORTED = {".md", ".pdf", ".docx", ".pptx", ".xlsx", ".xls", ".html", ".htm",
+             ".txt", ".csv", ".json", ".xml", ".rst", ".rtf", ".epub", ".ipynb",
+             ".yaml", ".yml", ".tsv", ".wav", ".mp3"}
 
 
 def sha256(text: str) -> str:
@@ -35,137 +42,81 @@ def read_file(path: Path) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
-def load_refresh_cache() -> dict:
-    if REFRESH_CACHE.exists():
-        try:
-            return json.loads(REFRESH_CACHE.read_text())
-        except (json.JSONDecodeError, IOError):
-            return {}
-    return {}
-
-
-def save_refresh_cache(cache: dict):
-    REFRESH_CACHE.parent.mkdir(parents=True, exist_ok=True)
-    REFRESH_CACHE.write_text(json.dumps(cache, indent=2, ensure_ascii=False))
-
-
-def extract_source_file(content: str) -> Optional[str]:
+def extract_source_file(content: str) -> str | None:
     """Extract source_file from YAML frontmatter."""
     match = re.search(r'^source_file:\s*(.+)$', content, re.MULTILINE)
     if match:
-        return match.group(1).strip().strip('"').strip("'")
+        val = match.group(1).strip().strip('"').strip("'")
+        return val or None
     return None
 
 
-def find_stale_sources(force: bool = False) -> list[tuple[Path, Path]]:
-    """Return list of (wiki_source_page, raw_document) pairs that need refresh."""
-    cache = load_refresh_cache()
-    stale = []
-
-    if not SOURCES_DIR.exists():
-        return stale
-
-    for wiki_page in sorted(SOURCES_DIR.glob("*.md")):
-        content = read_file(wiki_page)
-        source_file = extract_source_file(content)
-        if not source_file:
+def ingested_sources() -> dict[str, Path]:
+    """Map of resolved raw-source path -> interview page that ingested it."""
+    out: dict[str, Path] = {}
+    if not INTERVIEWS_DIR.exists():
+        return out
+    for page in sorted(INTERVIEWS_DIR.glob("*.md")):
+        src = extract_source_file(read_file(page))
+        if not src:
             continue
-
-        raw_path = REPO_ROOT / source_file
+        raw_path = (REPO_ROOT / src)
         if not raw_path.exists():
-            # Try relative to raw/
-            raw_path = RAW_DIR / source_file
-            if not raw_path.exists():
-                continue
-
-        raw_content = read_file(raw_path)
-        current_hash = sha256(raw_content)
-        cached_hash = cache.get(str(raw_path))
-
-        if force or cached_hash != current_hash:
-            stale.append((wiki_page, raw_path))
-
-    return stale
+            raw_path = RAW_DIR / src
+        out[str(raw_path.resolve())] = page
+    return out
 
 
-def refresh_page(wiki_page: Path, raw_path: Path) -> bool:
-    """Re-ingest a single source document."""
-    # Import ingest function
-    sys.path.insert(0, str(Path(__file__).parent))
-    try:
-        from ingest import ingest
-        print(f"\n{'='*60}")
-        print(f"  Refreshing: {wiki_page.name}")
-        print(f"  From:       {raw_path}")
-        print(f"{'='*60}")
-        ingest(str(raw_path))
-        return True
-    except Exception as e:
-        print(f"  [ERROR] Failed to refresh {wiki_page.name}: {e}")
-        return False
+def scan() -> dict:
+    sources = ingested_sources()
+    raw_files = [p for p in RAW_DIR.rglob("*") if p.is_file() and p.suffix.lower() in SUPPORTED] \
+        if RAW_DIR.exists() else []
+
+    not_ingested = []
+    for p in sorted(raw_files):
+        if str(p.resolve()) not in sources:
+            not_ingested.append(str(p.relative_to(REPO_ROOT)))
+
+    # interviews whose source_file points at a missing raw doc
+    missing_source = []
+    for resolved, page in sources.items():
+        if not Path(resolved).exists():
+            missing_source.append(str(page.relative_to(REPO_ROOT)))
+
+    return {
+        "raw_total": len(raw_files),
+        "ingested": len(sources),
+        "not_ingested": not_ingested,
+        "interviews_missing_source": sorted(missing_source),
+    }
 
 
 def main():
-    import argparse
-    parser = argparse.ArgumentParser(description="Refresh stale wiki source pages")
-    parser.add_argument("--force", action="store_true", help="Force re-ingest all sources")
-    parser.add_argument("--page", type=str, help="Refresh a specific wiki source page (e.g., sources/my-page)")
-    parser.add_argument("--dry-run", action="store_true", help="Only list stale pages, don't refresh")
+    parser = argparse.ArgumentParser(description="Raw inbox checker for the Project Wiki")
+    parser.add_argument("--json", action="store_true", help="Machine-readable JSON output")
     args = parser.parse_args()
 
-    if args.page:
-        # Refresh a single specific page
-        wiki_page = WIKI_DIR / args.page
-        if not wiki_page.suffix:
-            wiki_page = wiki_page.with_suffix(".md")
-        if not wiki_page.exists():
-            print(f"Page not found: {wiki_page}")
-            sys.exit(1)
-        content = read_file(wiki_page)
-        source_file = extract_source_file(content)
-        if not source_file:
-            print(f"No source_file found in frontmatter of {wiki_page.name}")
-            sys.exit(1)
-        raw_path = REPO_ROOT / source_file
-        if not raw_path.exists():
-            raw_path = RAW_DIR / source_file
-        if not raw_path.exists():
-            print(f"Raw document not found: {source_file}")
-            sys.exit(1)
-        stale = [(wiki_page, raw_path)]
+    result = scan()
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return
+
+    print(f"Raw documents: {result['raw_total']}  |  ingested: {result['ingested']}")
+    print()
+    ni = result["not_ingested"]
+    print(f"## Not yet ingested ({len(ni)})")
+    if ni:
+        for p in ni:
+            print(f"  • {p}")
+        print("\n  Ingest with: python tools/ingest.py <path>")
     else:
-        stale = find_stale_sources(force=args.force)
+        print("  All raw documents have been ingested. ✅")
 
-    if not stale:
-        print("All source pages are up to date. Nothing to refresh.")
-        return
-
-    print(f"Found {len(stale)} stale source page(s):")
-    for wiki_page, raw_path in stale:
-        print(f"  • {wiki_page.name} ← {raw_path.relative_to(REPO_ROOT)}")
-
-    if args.dry_run:
-        print("\n[DRY RUN] No changes made.")
-        return
-
-    # Refresh each stale page
-    cache = load_refresh_cache()
-    refreshed = 0
-    failed = 0
-
-    for wiki_page, raw_path in stale:
-        if refresh_page(wiki_page, raw_path):
-            raw_content = read_file(raw_path)
-            cache[str(raw_path)] = sha256(raw_content)
-            refreshed += 1
-        else:
-            failed += 1
-
-    save_refresh_cache(cache)
-
-    print(f"\n{'='*60}")
-    print(f"  Refresh complete: {refreshed} updated, {failed} failed")
-    print(f"{'='*60}")
+    ms = result["interviews_missing_source"]
+    if ms:
+        print(f"\n## Interviews whose source_file is missing ({len(ms)})")
+        for p in ms:
+            print(f"  • {p}")
 
 
 if __name__ == "__main__":

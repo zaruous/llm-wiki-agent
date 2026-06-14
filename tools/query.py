@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """
-Query the LLM Wiki.
+Query the Project Management Wiki.
 
 Usage:
-    python tools/query.py "What are the main themes across all sources?"
-    python tools/query.py "How does ConceptA relate to ConceptB?" --save
-    python tools/query.py "Summarize everything about EntityName" --save synthesis/my-analysis.md
+    python tools/query.py "Which must requirements are still open or overdue?"
+    python tools/query.py "What did INT-001 decide about scope?" --save
+    python tools/query.py "Status of REQ-012 and its dependencies" --save syntheses/req-012-status.md
 
 Flags:
     --save              Save the answer back into the wiki (prompts for filename)
     --save <path>       Save to a specific wiki path
+
+For exact status/progress/completion numbers, prefer the deterministic
+`python tools/status.py` over this LLM-based query.
 """
 
 import sys
@@ -119,7 +122,7 @@ def query(question: str, save_path: str | None = None):
     # Step 1: Read index
     index_content = read_file(INDEX_FILE)
     if not index_content:
-        print("Wiki is empty. Ingest some sources first with: python tools/ingest.py <source>")
+        print("Wiki is empty. Ingest an interview first with: python tools/ingest.py raw/interviews/<file>.md")
         sys.exit(1)
 
     # Step 2: Find relevant pages
@@ -128,7 +131,7 @@ def query(question: str, save_path: str | None = None):
     # If no keyword match, ask Claude to identify relevant pages from the index
     if not relevant_pages or len(relevant_pages) <= 1:
         print("  selecting relevant pages via API...")
-        prompt = f"Given this wiki index:\n\n{index_content}\n\nWhich pages are most relevant to answering: \"{question}\"\n\nReturn ONLY a JSON array of relative file paths (as listed in the index), e.g. [\"sources/foo.md\", \"concepts/Bar.md\"]. Maximum 10 pages."
+        prompt = f"Given this wiki index:\n\n{index_content}\n\nWhich pages are most relevant to answering: \"{question}\"\n\nReturn ONLY a JSON array of relative file paths (as listed in the index), e.g. [\"requirements/REQ-001.md\", \"interviews/INT-001.md\"]. Maximum 10 pages."
         raw = call_llm(prompt, "LLM_MODEL_FAST", "claude-3-5-haiku-latest", max_tokens=512)
         raw = raw.strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
@@ -152,7 +155,7 @@ def query(question: str, save_path: str | None = None):
 
     # Step 4: Synthesize answer
     print(f"  synthesizing answer from {len(relevant_pages)} pages...")
-    prompt = f"""You are querying an LLM Wiki to answer a question. Use the wiki pages below to synthesize a thorough answer. Cite sources using [[PageName]] wikilink syntax.
+    prompt = f"""You are querying a Project Management Wiki to answer a question. Use the wiki pages below to synthesize a thorough answer. Support status/priority/owner/date filters (e.g. open `must`, overdue). Cite pages using [[PageName]] wikilink syntax.
 
 Schema:
 {schema}
@@ -184,7 +187,6 @@ Write a well-structured markdown answer with headers, bullets, and [[wikilink]] 
 title: "{question[:80]}"
 type: synthesis
 tags: []
-sources: []
 last_updated: {today}
 ---
 

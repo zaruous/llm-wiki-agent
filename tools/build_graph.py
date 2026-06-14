@@ -50,9 +50,15 @@ SCHEMA_FILE = REPO_ROOT / "CLAUDE.md"
 
 # Node type → color mapping
 TYPE_COLORS = {
-    "source": "#4CAF50",
-    "entity": "#2196F3",
-    "concept": "#FF9800",
+    # project management page types
+    "requirement": "#4CAF50",
+    "interview": "#2196F3",
+    "decision": "#FF9800",
+    "stakeholder": "#00BCD4",
+    "milestone": "#E91E63",
+    "risk": "#F44336",
+    "scope": "#795548",
+    "charter": "#607D8B",
     "synthesis": "#9C27B0",
     "unknown": "#9E9E9E",
 }
@@ -96,7 +102,8 @@ def sha256(text: str) -> str:
 
 def all_wiki_pages() -> list[Path]:
     return [p for p in WIKI_DIR.rglob("*.md")
-            if p.name not in ("index.md", "log.md", "lint-report.md")]
+            if p.name not in ("index.md", "log.md", "lint-report.md", "health-report.md", "tags.md")
+            and "_templates" not in p.relative_to(WIKI_DIR).parts]
 
 
 def extract_wikilinks(content: str) -> list[str]:
