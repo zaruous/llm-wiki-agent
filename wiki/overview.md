@@ -2,17 +2,18 @@
 title: "Project Overview / Dashboard"
 type: synthesis
 tags: []
-last_updated: ""
+last_updated: 2026-06-14
 ---
 
 # Project Overview
 
-*Maintained by the agent. Updated on every ingest and requirement change to reflect live project status. For exact numbers run `python tools/status.py`.*
+*Maintained by the agent. Refreshed by `python tools/status.py --save`.*
 
 ## Status at a Glance
-- **Completion rate:** — (verified + closed) / (total − rejected − deferred)
-- **Weighted progress:** —
-- **Exit readiness:** —
+- **Total requirements:** 0
+- **Completion rate:** 0.0% (0 done / 0 in base)
+- **Weighted progress:** 0.0%
+- **Exit readiness:** not ready
 
 ## Requirements by Status
 | proposed | approved | in-progress | implemented | verified | closed | rejected | deferred |
@@ -25,10 +26,16 @@ last_updated: ""
 | 0 | 0 | 0 | 0 |
 
 ## Overdue / At-Risk
-- None yet.
+- None.
 
 ## Open Risks
-- None yet.
+- None.
+
+## Exit Gates
+- Open `must` requirements: OK
+- Overdue active requirements: OK
+- Open `high` risks: OK
+- Exit Criteria (manual): review `wiki/scope/scope.md`
 
 ---
 

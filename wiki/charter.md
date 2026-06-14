@@ -21,10 +21,10 @@ What this project is trying to achieve, and why.
 - **Out:** ...
 
 ## Stakeholders
-- [[StakeholderName]] — role / interest
+- StakeholderName — role / interest
 
 ## Milestones
-- [[M-001]] — target date
+- M-001 — target date
 
 ## Constraints & Assumptions
 - Budget / timeline / compliance constraints

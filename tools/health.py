@@ -38,6 +38,7 @@ from datetime import date
 
 REPO_ROOT = Path(__file__).parent.parent
 WIKI_DIR = REPO_ROOT / "wiki"
+RAW_DIR = REPO_ROOT / "raw"
 INDEX_FILE = WIKI_DIR / "index.md"
 LOG_FILE = WIKI_DIR / "log.md"
 
@@ -71,7 +72,12 @@ SECRET_PATTERNS = [
 
 
 def read_file(path: Path) -> str:
-    return path.read_text(encoding="utf-8") if path.exists() else ""
+    if not path.exists():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return ""
 
 
 def all_wiki_pages() -> list[Path]:
@@ -81,6 +87,30 @@ def all_wiki_pages() -> list[Path]:
         if p.name not in EXCLUDE_NAMES
         and not any(part in EXCLUDE_DIRS for part in p.relative_to(WIKI_DIR).parts)
     ]
+
+
+def all_secret_scan_files(pages: list[Path]) -> list[Path]:
+    """Text files to scan for secrets/PII before commit.
+
+    Wiki pages are always included. raw/ may contain converted notes, interview
+    transcripts, or copied requirements docs, so scan it too; binary files are
+    harmlessly skipped by read_file().
+    """
+    files = list(pages)
+    if RAW_DIR.exists():
+        files.extend(p for p in RAW_DIR.rglob("*") if p.is_file() and p.name != ".gitkeep")
+    files.extend(
+        p for p in REPO_ROOT.glob(".env*")
+        if p.is_file() and p.name != ".env.example"
+    )
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for p in files:
+        resolved = p.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            unique.append(p)
+    return unique
 
 
 def strip_frontmatter(content: str) -> str:
@@ -316,11 +346,13 @@ def check_requirements() -> dict:
 
 # ── Check: Secret / PII scan ────────────────────────────────────────
 
-def check_secrets(pages: list[Path]) -> list[dict]:
-    """Scan page text for high-confidence secrets and obvious PII patterns."""
+def check_secrets(files: list[Path]) -> list[dict]:
+    """Scan text files for high-confidence secrets and obvious PII patterns."""
     findings = []
-    for p in pages:
+    for p in files:
         text = read_file(p)
+        if not text:
+            continue
         for lineno, line in enumerate(text.splitlines(), 1):
             for label, pat in SECRET_PATTERNS:
                 if pat.search(line):
@@ -337,14 +369,16 @@ def check_secrets(pages: list[Path]) -> list[dict]:
 def run_health() -> dict:
     """Run all health checks, return structured results."""
     pages = all_wiki_pages()
+    secret_scan_files = all_secret_scan_files(pages)
     return {
         "date": date.today().isoformat(),
         "total_pages": len(pages),
+        "secret_scan_files": len(secret_scan_files),
         "empty_files": check_empty_files(pages),
         "index_sync": check_index_sync(pages),
         "log_coverage": check_log_coverage(pages),
         "requirements": check_requirements(),
-        "secrets": check_secrets(pages),
+        "secrets": check_secrets(secret_scan_files),
     }
 
 
@@ -354,6 +388,7 @@ def format_report(results: dict) -> str:
         f"# Project Wiki Health Report — {results['date']}",
         "",
         f"Scanned {results['total_pages']} wiki pages. "
+        f"Secret scan covered {results['secret_scan_files']} text-capable files. "
         "Checks are purely structural (no LLM calls).",
         "",
     ]

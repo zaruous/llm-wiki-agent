@@ -24,8 +24,16 @@ from datetime import date
 sys.path.insert(0, str(Path(__file__).parent))
 from health import (  # noqa: E402
     REPO_ROOT, WIKI_DIR, read_file, parse_frontmatter,
-    VALID_STATUS, VALID_PRIORITY, DONE_STATUS, DROPPED_STATUS,
+    DONE_STATUS, DROPPED_STATUS,
 )
+
+OVERVIEW_FILE = WIKI_DIR / "overview.md"
+LOG_FILE = WIKI_DIR / "log.md"
+STATUS_ORDER = [
+    "proposed", "approved", "in-progress", "implemented",
+    "verified", "closed", "rejected", "deferred",
+]
+PRIORITY_ORDER = ["must", "should", "could", "wont"]
 
 
 def _pages(subdir: str) -> list[Path]:
@@ -38,8 +46,8 @@ def _today() -> str:
 
 
 def run_status() -> dict:
-    status_counts = {s: 0 for s in VALID_STATUS}
-    priority_counts = {p: 0 for p in VALID_PRIORITY}
+    status_counts = {s: 0 for s in STATUS_ORDER}
+    priority_counts = {p: 0 for p in PRIORITY_ORDER}
     overdue: list[dict] = []
     must_open: list[str] = []
     active_progress: list[int] = []
@@ -109,13 +117,13 @@ def run_status() -> dict:
 
 def format_report(r: dict) -> str:
     lines = [
-        f"# Project Status — {r['date']}",
+        f"# Project Status - {r['date']}",
         "",
         f"- **Total requirements:** {r['total_requirements']}",
         f"- **Completion rate:** {r['completion_rate']}%  "
         f"({r['done']} done / {r['total_requirements'] - r['dropped']} in base)",
         f"- **Weighted progress (active):** {r['weighted_progress']}%",
-        f"- **Exit readiness:** {'✅ ready' if r['exit_ready'] else '❌ not ready'}",
+        f"- **Exit readiness:** {'ready' if r['exit_ready'] else 'not ready'}",
         "",
         "## Requirements by Status",
         "| " + " | ".join(r["status_counts"].keys()) + " |",
@@ -136,18 +144,103 @@ def format_report(r: dict) -> str:
         for o in r["overdue"]:
             lines.append(f"| {o['id']} | {o['due_date']} | {o['status']} | {o['owner']} |")
     else:
-        lines.append("No overdue active requirements. ✅")
+        lines.append("No overdue active requirements.")
     lines.append("")
 
     lines.append("## Exit Gates")
     lines.append(f"- Open `must` requirements: {len(r['must_open'])} "
-                 + (f"({', '.join(r['must_open'])})" if r["must_open"] else "✅"))
-    lines.append(f"- Overdue requirements: {len(r['overdue'])} " + ("" if r["overdue"] else "✅"))
+                 + (f"({', '.join(r['must_open'])})" if r["must_open"] else "OK"))
+    lines.append(f"- Overdue requirements: {len(r['overdue'])} " + ("" if r["overdue"] else "OK"))
     lines.append(f"- Open `high` risks: {len(r['open_high_risks'])} "
-                 + (f"({', '.join(r['open_high_risks'])})" if r["open_high_risks"] else "✅"))
+                 + (f"({', '.join(r['open_high_risks'])})" if r["open_high_risks"] else "OK"))
     lines.append("- Exit Criteria (manual): review `wiki/scope/scope.md`")
     lines.append("")
     return "\n".join(lines)
+
+
+def _table(headers: list[str], values: list[str | int]) -> list[str]:
+    return [
+        "| " + " | ".join(headers) + " |",
+        "|" + "---|" * len(headers),
+        "| " + " | ".join(str(v) for v in values) + " |",
+    ]
+
+
+def format_overview(r: dict) -> str:
+    overdue_lines = ["- None."] if not r["overdue"] else [
+        f"- {o['id']} - due {o['due_date']} - {o['status']} - owner: {o['owner'] or '(unassigned)'}"
+        for o in r["overdue"]
+    ]
+    risk_lines = ["- None."] if not r["open_high_risks"] else [
+        f"- [[{rid}]]" for rid in r["open_high_risks"]
+    ]
+    must_gate = "OK" if not r["must_open"] else ", ".join(r["must_open"])
+    overdue_gate = "OK" if not r["overdue"] else str(len(r["overdue"]))
+    risk_gate = "OK" if not r["open_high_risks"] else ", ".join(r["open_high_risks"])
+
+    lines = [
+        "---",
+        'title: "Project Overview / Dashboard"',
+        "type: synthesis",
+        "tags: []",
+        f"last_updated: {r['date']}",
+        "---",
+        "",
+        "# Project Overview",
+        "",
+        "*Maintained by the agent. Refreshed by `python tools/status.py --save`.*",
+        "",
+        "## Status at a Glance",
+        f"- **Total requirements:** {r['total_requirements']}",
+        f"- **Completion rate:** {r['completion_rate']}% ({r['done']} done / {r['total_requirements'] - r['dropped']} in base)",
+        f"- **Weighted progress:** {r['weighted_progress']}%",
+        f"- **Exit readiness:** {'ready' if r['exit_ready'] else 'not ready'}",
+        "",
+        "## Requirements by Status",
+        *_table(STATUS_ORDER, [r["status_counts"][s] for s in STATUS_ORDER]),
+        "",
+        "## Requirements by Priority (MoSCoW)",
+        *_table(PRIORITY_ORDER, [r["priority_counts"][p] for p in PRIORITY_ORDER]),
+        "",
+        "## Overdue / At-Risk",
+        *overdue_lines,
+        "",
+        "## Open Risks",
+        *risk_lines,
+        "",
+        "## Exit Gates",
+        f"- Open `must` requirements: {must_gate}",
+        f"- Overdue active requirements: {overdue_gate}",
+        f"- Open `high` risks: {risk_gate}",
+        "- Exit Criteria (manual): review `wiki/scope/scope.md`",
+        "",
+    ]
+    if r["total_requirements"] == 0:
+        lines.extend([
+            "---",
+            "",
+            "No interviews ingested yet. Add the first one:",
+            "",
+            "```",
+            "ingest raw/interviews/<file>.md",
+            "```",
+            "",
+        ])
+    return "\n".join(lines)
+
+
+def append_log(entry: str):
+    existing = read_file(LOG_FILE).rstrip()
+    text = entry.strip()
+    if existing:
+        LOG_FILE.write_text(existing + "\n\n" + text + "\n", encoding="utf-8")
+    else:
+        LOG_FILE.write_text("# Wiki Log\n\n" + text + "\n", encoding="utf-8")
+
+
+def save_overview(r: dict):
+    OVERVIEW_FILE.write_text(format_overview(r), encoding="utf-8")
+    append_log(f"## [{r['date']}] status | Project status refreshed\n\nUpdated wiki/overview.md from deterministic status rollup.")
 
 
 if __name__ == "__main__":
@@ -156,7 +249,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--json", action="store_true", help="Machine-readable JSON output")
     parser.add_argument("--save", action="store_true",
-                        help="(reserved) refresh wiki/overview.md status block")
+                        help="Refresh wiki/overview.md with the latest status rollup")
     args = parser.parse_args()
 
     results = run_status()
@@ -164,3 +257,6 @@ if __name__ == "__main__":
         print(json.dumps(results, indent=2))
     else:
         print(format_report(results))
+    if args.save:
+        save_overview(results)
+        print(f"Saved: {OVERVIEW_FILE.relative_to(REPO_ROOT)}")

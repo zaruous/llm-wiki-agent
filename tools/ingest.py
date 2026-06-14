@@ -32,10 +32,7 @@ import sys
 import json
 import hashlib
 import re
-import shutil
-import tempfile
 from pathlib import Path
-from collections import defaultdict
 from datetime import date
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -43,6 +40,7 @@ WIKI_DIR = REPO_ROOT / "wiki"
 LOG_FILE = WIKI_DIR / "log.md"
 INDEX_FILE = WIKI_DIR / "index.md"
 OVERVIEW_FILE = WIKI_DIR / "overview.md"
+CONVERTED_DIR = REPO_ROOT / ".wiki-cache" / "converted"
 
 # File extensions that can be auto-converted to markdown via markitdown.
 # .md files are ingested directly without conversion.
@@ -71,6 +69,14 @@ def clip(text: str, limit: int = 260) -> str:
 
 def read_file(path: Path) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def display_path(path: Path) -> str:
+    """Return a stable path for prompts and reports."""
+    try:
+        return str(path.resolve().relative_to(REPO_ROOT)).replace("\\", "/")
+    except ValueError:
+        return path.name
 
 
 def call_llm(prompt: str, max_tokens: int = 8192) -> str:
@@ -221,8 +227,9 @@ def validate_ingest(changed_pages: list[str] | None = None) -> dict:
 def convert_to_md(source: Path) -> Path:
     """Convert a non-markdown file to .md using markitdown.
 
-    Returns the path to the converted .md file (placed next to the original
-    with a .md extension, or in a temp location if the source dir is read-only).
+    Returns the path to the converted .md file. Converted content is written to
+    .wiki-cache/converted/ so raw source directories remain immutable and the
+    derived markdown is not accidentally committed.
     """
     try:
         from markitdown import MarkItDown
@@ -238,17 +245,17 @@ def convert_to_md(source: Path) -> Path:
         print(f"Error: failed to convert '{source.name}': {e}")
         sys.exit(1)
 
-    # Write converted output next to source as <name>.md
-    output = source.with_suffix(".md")
     try:
-        output.write_text(result.text_content, encoding="utf-8")
-    except OSError:
-        # Fallback: source directory may be read-only
-        tmp = Path(tempfile.mkdtemp()) / f"{source.stem}.md"
-        tmp.write_text(result.text_content, encoding="utf-8")
-        output = tmp
+        rel = source.resolve().relative_to(REPO_ROOT)
+        output = CONVERTED_DIR / rel.with_suffix(".md")
+    except ValueError:
+        digest = hashlib.sha256(str(source.resolve()).encode("utf-8")).hexdigest()[:12]
+        output = CONVERTED_DIR / f"external-{digest}-{source.stem}.md"
 
-    print(f"  ✓ Converted {source.name} → {output.name}")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(result.text_content, encoding="utf-8")
+
+    print(f"  ✓ Converted {source.name} → {display_path(output)}")
     return output
 
 
@@ -257,6 +264,8 @@ def ingest(source_path: str, auto_convert: bool = True):
     if not source.exists():
         print(f"Error: file not found: {source_path}")
         sys.exit(1)
+
+    original_source = source
 
     # Auto-convert non-markdown files
     converted_path = None
@@ -293,7 +302,7 @@ Schema and conventions:
 Current wiki state (index + recent requirement/interview pages):
 {wiki_context if wiki_context else "(wiki is empty — this is the first interview)"}
 
-New source to ingest (file: {source.relative_to(REPO_ROOT) if source.is_relative_to(REPO_ROOT) else source.name}):
+New source to ingest (file: {display_path(original_source)}):
 === SOURCE START ===
 {source_content}
 === SOURCE END ===
@@ -312,7 +321,7 @@ secrets/credentials/PII into pages; minimize or pseudonymize.
 Return ONLY a valid JSON object with these fields (no markdown fences, no prose outside the JSON):
 {{
   "title": "Human-readable interview/meeting title",
-  "interview_page": "full markdown for wiki/interviews/{int_id}.md using the interview page format. Set source_file to the source path above. Aggressively use [[wikilinks]] to requirements, stakeholders, and decisions.",
+  "interview_page": "full markdown for wiki/interviews/{int_id}.md using the interview page format. Set source_file to \"{display_path(original_source)}\" (the original source path, not any converted cache path). Aggressively use [[wikilinks]] to requirements, stakeholders, and decisions.",
   "interview_index_entry": "- [{int_id}](interviews/{int_id}.md) — title — {today}",
   "requirements": [
     {{"id": "REQ-{req_start:03d}", "content": "full markdown for wiki/requirements/REQ-{req_start:03d}.md using the requirement page format (status: proposed, source_interviews: [{int_id}], leave WBS/owner fields blank until approved)", "index_entry": "- [REQ-{req_start:03d}](requirements/REQ-{req_start:03d}.md) — title — `priority` / proposed"}}

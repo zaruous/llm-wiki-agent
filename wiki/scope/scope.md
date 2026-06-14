@@ -17,10 +17,10 @@ frontmatter (`progress`/`start_date`/`due_date`) is the single source of truth.*
 | | | | | | | | |
 
 ## In-Scope
-- (WBS item → [[REQ-XXX]])
+- (WBS item -> REQ-XXX)
 
 ## Out-of-Scope
-- (item — reason / [[DEC-XXX]])
+- (item - reason / DEC-XXX)
 
 ## Definition of Done
 - All `must` requirements `verified` (progress 100%)
@@ -32,4 +32,4 @@ frontmatter (`progress`/`start_date`/`due_date`) is the single source of truth.*
 - (project-specific criteria)
 
 ## Scope Change Log
-- (YYYY-MM-DD — change — [[DEC-XXX]])
+- (YYYY-MM-DD - change - DEC-XXX)

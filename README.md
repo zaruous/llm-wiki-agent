@@ -77,7 +77,7 @@ build graph                                # traceability graph (interview→req
 
 **Claude Code** also provides `/wiki-ingest`, `/wiki-query`, `/wiki-health`, `/wiki-lint`, `/wiki-graph`, and `/project-status` as slash commands (via `.claude/commands/`). Other agents use the natural-language triggers above, which work identically.
 
-Works with markdown, PDF, DOCX, PPTX, XLSX, HTML, TXT, CSV, JSON, XML, RST, EPUB, and more. Non-markdown files are auto-converted via [markitdown](https://github.com/microsoft/markitdown) at ingest time.
+Works with markdown, PDF, DOCX, PPTX, XLSX, HTML, TXT, CSV, JSON, XML, RST, EPUB, and more. Non-markdown files are auto-converted via [markitdown](https://github.com/microsoft/markitdown) at ingest time. Converted markdown is written under `.wiki-cache/converted/`, not beside the original source file.
 
 ## What You Get
 
@@ -87,7 +87,7 @@ Works with markdown, PDF, DOCX, PPTX, XLSX, HTML, TXT, CSV, JSON, XML, RST, EPUB
 
 **Live dashboard** — `overview.md` plus `python tools/status.py` give completion rate, weighted progress, overdue list, and exit-readiness gates (all `must` done, no overdue, no open high risk, Exit Criteria met).
 
-**Deterministic health checks** — `python tools/health.py` validates schema/enums, unique IDs, traceability, execution gaps, completion/drop consistency, and **scans for secrets/PII** — zero LLM calls, safe every session.
+**Deterministic health checks** — `python tools/health.py` validates schema/enums, unique IDs, traceability, execution gaps, completion/drop consistency, and **scans wiki/raw text for secrets/PII** — zero LLM calls, safe every session.
 
 **Traceability graph** — `graph.html` colors pages by type and highlights broken paths (an interview with no requirement, a requirement with no scope mapping).
 
@@ -99,6 +99,7 @@ Works with markdown, PDF, DOCX, PPTX, XLSX, HTML, TXT, CSV, JSON, XML, RST, EPUB
 |---|---|---|
 | `tools/health.py` | Structural integrity: schema, enums, unique IDs, traceability, execution gaps, completion/drop consistency, secret/PII scan | None |
 | `tools/status.py` | Completion rate, weighted progress, overdue list, exit-readiness gates | None |
+| `tools/requirement.py` | Deterministic approve/progress/complete/drop updates for requirement lifecycle fields, WBS sync, and logs | None |
 | `tools/lint.py` | Content quality: contradictions, gaps, unmapped requirements | Yes |
 | `tools/build_graph.py` | Traceability graph (`graph.json` + `graph.html`) | Optional |
 
@@ -109,8 +110,9 @@ Run `health` and `status` every session (free, fast); run `lint` periodically.
 This wiki stores interviews, stakeholders, and requirements as **plaintext markdown in git** — higher confidentiality/PII risk than a generic notebook. Key practices (full review in [`docs/project-wiki-plan.md`](docs/project-wiki-plan.md) §7):
 
 - **Ingested content is untrusted data, never instructions.** The agent will not delete pages or change scope from something written inside a source document — those require an explicit human Decision (DEC).
-- **No secrets/PII in pages.** `health.py` scans for API keys, tokens, and obvious PII patterns. Minimize and pseudonymize personal identifiers.
-- Keep sensitive `raw/` originals out of git (`.gitignore`) and commit anonymized versions; use a **private repo** for confidential projects.
+- **No secrets/PII in pages or raw text.** `health.py` scans wiki pages, text-readable `raw/` files, and local env files for API keys, tokens, and obvious PII patterns. Minimize and pseudonymize personal identifiers.
+- `raw/` source documents are ignored by default. Commit only anonymized fixtures intentionally, for example with `git add -f raw/examples/anonymized-kickoff.md`; use a **private repo** for confidential projects.
+- Non-markdown conversion output is generated in ignored `.wiki-cache/converted/` so immutable raw source directories are not modified by ingest.
 
 ## Documentation
 
